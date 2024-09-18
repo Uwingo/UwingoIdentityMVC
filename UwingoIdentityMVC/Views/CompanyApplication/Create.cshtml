@@ -1,0 +1,82 @@
+﻿@model Tuple<CompanyApplicationDto, List<CompanyDto>, List<ApplicationDto>>
+
+@{
+    ViewBag.Title = "Assign Application to Company";
+}
+
+<h2>Assign Application to Company</h2>
+
+<div class="form-group">
+    <label for="CompanyId">Select Company</label>
+
+    <select class="form-control select2" name="CompanyId" id="CompanyId" data-placeholder="-- Select Company --">
+        <option value=""></option>
+        @foreach (var item in Model.Item2)
+        {
+            <option value="@item.Id">@item.Name</option>
+        }
+    </select>
+
+
+</div>
+<div class="form-group">
+    <label for="ApplicationId">Select Application</label>
+    <select class="form-control select2" name="ApplicationId" id="ApplicationId" data-placeholder="-- Select Application --">
+        <option value=""></option>
+        @foreach (var item in Model.Item3)
+        {
+            <option value="@item.Id">@item.Name</option>
+        }
+    </select>
+</div>
+<button type="button" name="button" id="button" class="btn btn-primary" onclick="submitCreateForm()">Assign</button>
+<a asp-action="Index" class="btn btn-secondary">Cancel</a>
+
+@section Scripts {
+    <script>
+        function submitCreateForm() {
+            Swal.fire({
+                title: 'Are you sure?',
+                text: "You are about to assign this application to the company!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, Assign it!',
+                cancelButtonText: 'No, Cancel!',
+                reverseButtons: true
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    var companyApplication = {
+                        CompanyId: $('#CompanyId').val(),
+                        ApplicationId: $('#ApplicationId').val()
+                    };
+
+                    console.log(companyApplication.CompanyId);
+                    console.log(companyApplication.ApplicationId);
+
+                    $.ajax({
+                        url: '@Url.Action("Create", "CompanyApplication")',
+                        type: 'POST',
+                        data: JSON.stringify(companyApplication),
+                        contentType: 'application/json',
+                        success: function (response) {
+                            Swal.fire(
+                                'Assigned!',
+                                'The application has been assigned successfully.',
+                                'success'
+                            ).then(() => {
+                                window.location.href = '@Url.Action("Index", "CompanyApplication")';
+                            });
+                        },
+                        error: function () {
+                            Swal.fire(
+                                'Error!',
+                                'There was an error assigning the application.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+    </script>
+}

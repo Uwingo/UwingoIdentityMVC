@@ -1,0 +1,30 @@
+﻿@model List<TenantDto>
+
+@{
+    ViewBag.Title = "Şirket Oluştur";
+}
+
+<h2>Şirket Oluştur</h2>
+
+<form id="createCompanyForm" asp-action="Create">
+    <div class="form-group">
+        <label for="Name">Ad</label>
+        <input type="text" class="form-control" id="Name" name="Name" required />
+    </div>
+    <div class="form-group">
+        <label for="Address">Adres</label>
+        <input type="text" class="form-control" id="Address" name="Address" required />
+    </div>
+    <div class="form-group">
+        <label for="TenantId">Tenant</label>
+        <select id="TenantId" name="TenantId" class="form-select select2" required data-placeholder="-- Lütfen Tenant Seçiniz --">
+            <option value=""></option>
+            @foreach (var tenant in Model)
+            {
+                <option value="@tenant.Id">@tenant.Name</option>
+            }
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary">Oluştur</button>
+    <a asp-action="Index" class="btn btn-secondary">İptal</a>
+</form>

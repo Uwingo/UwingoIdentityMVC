@@ -1,0 +1,16 @@
+﻿@model RoleDto
+
+@{
+    ViewBag.Title = "Rol Oluştur";
+}
+
+<h2>Rol Oluştur</h2>
+
+<form id="createRoleForm" asp-action="Create">
+    <div class="form-group">
+        <label for="Name">Ad</label>
+        <input type="text" class="form-control" id="Name" name="Name" required />
+    </div>
+    <button type="submit" class="btn btn-primary">Oluştur</button>
+    <a asp-action="Index" class="btn btn-secondary">İptal</a>
+</form>
