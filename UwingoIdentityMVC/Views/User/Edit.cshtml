@@ -120,7 +120,7 @@
     <input type="email" class="form-control" id="Email" name="Email" value="@Model.Email" required />
 </div>
 <div>
-    <input type="text" class="form-control" id="ApplicationId" name="ApplicationId" value="@Model.ApplicationId" style="display:none" />
+    <input type="text" class="form-control" id="CompanyApplicationId" name="CompanyApplicationId" value="@Model.CompanyApplicationId" style="display:none" />
 </div>
 <button type="button" name="button" onclick="myFunc()" id="update" class="btn btn-primary">Güncelle</button>
 <a asp-action="Index" class="btn btn-secondary">İptal</a>
@@ -172,7 +172,7 @@
                         LastName: document.getElementById("LastName").value,
                         PhoneNumber: document.getElementById("PhoneNumber").value,
                         Email: document.getElementById("Email").value,
-                        ApplicationId: document.getElementById("ApplicationId").value
+                        CompanyApplicationId: document.getElementById("CompanyApplicationId").value
                     };
 
                     $.ajax({

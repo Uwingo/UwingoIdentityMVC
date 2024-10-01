@@ -8,7 +8,7 @@ namespace UwingoIdentityMVC.Controllers
     [Route("ui-kit/{action}")]
     public class UIKitController : Controller
     {
-        string url = "https://localhost:44314/";
+        string url = "https://localhost:44315/";
         public IActionResult Alert() => View();
         public IActionResult Avatar() => View();
         public IActionResult Badges() => View();

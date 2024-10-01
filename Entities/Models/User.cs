@@ -10,9 +10,9 @@ namespace Entity.Models
         public string? RefreshToken { get; set; }
         public DateTime RefreshTokenExpiryTime { get; set; }
 
-        [ForeignKey("ApplicationId")]
-        public Guid ApplicationId { get; set; }
-        public Application Application { get; set; }
+        [ForeignKey("CompanyApplicationId")]
+        public Guid CompanyApplicationId { get; set; }
+        public CompanyApplication CompanyApplication { get; set; }
         public ICollection<UserRole> UserRoles { get; set; }
     }
 

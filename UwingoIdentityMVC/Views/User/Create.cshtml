@@ -1,4 +1,4 @@
-﻿@model Tuple<List<ApplicationDto>, List<RoleDto>>
+﻿@model Tuple<List<CompanyDto> ,List<ApplicationDto>, List<RoleDto>>
 
 @{
     ViewBag.Title = "Kullanıcı Ekle";
@@ -6,8 +6,7 @@
 
 <h2>Kullanıcı Oluştur</h2>
 
-<form class="form-horizontal auth-form" method="post"
-      action="/User/Create">
+<form class="form-horizontal auth-form" method="post" action="/User/Create">
 
     <div class="form-group mb-2">
         <label class="form-label" for="firstName">Name</label>
@@ -65,24 +64,48 @@
         </div>
     </div><!--end form-group-->
 
+    @if (User.IsInRole("Admin"))
+    {
+        <div class="form-group mb-2">
+            <label class="form-label" for="companySelect">Company</label>
+            <select class="form-select select2" name="CompanyId" id="companySelect" required data-placeholder="-- Lütfen Şirket Seçiniz --">
+                <option value=""></option>
+                @foreach (var company in Model.Item1)
+                {
+                    <option value="@company.Id">@company.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="form-group mb-2">
+            <label class="form-label" for="applicationSelect">User's Application</label>
+            <select class="form-select" name="ApplicationId" id="applicationSelect" required>
+                <option value="">-- Lütfen Uygulama Seçiniz --</option>
+            </select>
+        </div>
+    }
     <!-- Application Dropdown -->
-    <div class="form-group mb-2">
+    @if (User.IsInRole("TenantAdmin") || User.IsInRole("User"))
+    {
+        <div class="form-group mb-2">
         <label class="form-label" for="applicationSelect">User's Application</label>
         <select class="form-select select2" name="ApplicationId" id="applicationSelect" required data-placeholder="-- Lütfen Uygulama Seçiniz --">
             <option value=""></option>
-            @foreach (var application in Model.Item1)
+            @foreach (var application in Model.Item2)
             {
                 <option value="@application.Id">@application.Name</option>
             }
         </select>
-    </div>
+        </div> 
+    }
+    
 
     <!-- Role Dropdown -->
     <div class="form-group mb-2">
         <label class="form-label" for="roleSelect">User's Company Role</label>
         <select class="form-select select2" name="RoleId" id="roleSelect" required data-placeholder="-- Lütfen Kullanıcı Rolünü Seçiniz --">
             <option value=""></option>
-            @foreach (var role in Model.Item2)
+            @foreach (var role in Model.Item3)
             {
                 <option value="@role.Id">@role.Name</option>
             }
@@ -111,3 +134,39 @@
         </div><!--end col-->
     </div> <!--end form-group-->
 </form><!--end form-->
+
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Şirket seçildiğinde ilgili uygulamaları getir
+            $('#companySelect').change(function () {
+                var companyId = $(this).val();
+                if (companyId) {
+                    // URL'i JavaScript içinde dinamik olarak oluşturuyoruz
+                    $.ajax({
+                        url: '@Url.Action("GetApplicationsByCompany")', // Dinamik URL kullanımı
+                        type: 'GET',
+                        data: { companyId: companyId },
+                        success: function (data) {
+                            console.log(data); // Gelen veriyi konsola yazdırın
+                            $('#applicationSelect').empty();
+                            $('#applicationSelect').append('<option value="">-- Lütfen Uygulama Seçiniz --</option>'); // Boş seçenek ekle
+                            $.each(data, function (index, application) {
+                                $('#applicationSelect').append(new Option(application.name, application.id));
+                            });
+                        },
+                        error: function () {
+                            alert('Uygulamalar getirilirken bir hata oluştu.');
+                        }
+                    });
+                } else {
+                    $('#applicationSelect').empty(); // Şirket seçilmezse dropdown boşalt
+                    $('#applicationSelect').append('<option value="">-- Lütfen Uygulama Seçiniz --</option>'); // Boş seçenek ekle
+                }
+            });
+        });
+    </script>
+}
+
+

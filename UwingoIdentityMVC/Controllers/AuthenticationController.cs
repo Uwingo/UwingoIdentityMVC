@@ -104,33 +104,19 @@ namespace UwingoIdentityMVC.Controllers
         public async Task<IActionResult> RegisterUser(UserRegistrationDto myUser, Guid roleId)
         {
             var apiRegister = "api/Authentication/register";
-            var apiGetTenantId = $"api/Authentication/ApplicationId/{User.Identity.Name}";
 
             // Kullanıcı adından ApplicationId'yi al
-            HttpResponseMessage appResponse = await GenerateClient.Client.GetAsync(apiGetTenantId);
 
-            if (appResponse.IsSuccessStatusCode)
+            // Kullanıcıyı kaydet
+            HttpResponseMessage registerResponse = await GenerateClient.Client.PostAsJsonAsync(apiRegister, myUser);
+
+            if (registerResponse.IsSuccessStatusCode)
             {
-                var appData = await appResponse.Content.ReadAsStringAsync();
-                var applicationId = JsonConvert.DeserializeObject<Guid>(appData);
-
-                // applicationId'yi UserRegistrationDto'ya ata
-                myUser.ApplicationId = applicationId;
-
-                // Kullanıcıyı kaydet
-                HttpResponseMessage registerResponse = await GenerateClient.Client.PostAsJsonAsync(apiRegister, myUser);
-
-                if (registerResponse.IsSuccessStatusCode)
-                {
-                    return View("Index");
-                }
-                else ViewBag.Message = "Kullanıcı kaydı başarısız oldu.";
-
+                return View("Index");
             }
-            else
-            {
-                ViewBag.Message = "applicationId alınamadı.";
-            }
+            else ViewBag.Message = "Kullanıcı kaydı başarısız oldu.";
+
+
 
             return View("Index");
         }

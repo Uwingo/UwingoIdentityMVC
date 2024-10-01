@@ -39,6 +39,8 @@ namespace UwingoIdentityMVC.Controllers
                 return StatusCode(403);
 
             List<ApplicationDto> applications = new List<ApplicationDto>();
+            List<CompanyDto> companies = new List<CompanyDto>();
+            List<CompanyApplicationDto> companyApplications = new List<CompanyApplicationDto>();
             List<RoleDto> roles = new List<RoleDto>();
 
             var isAdmin = User.IsInRole("Admin");
@@ -48,22 +50,59 @@ namespace UwingoIdentityMVC.Controllers
             // Kullanıcı adminse tüm şirketlerin uygulamalarını getirelim
             if (isAdmin)
             {
-                var response = await GenerateClient.Client.GetAsync("api/Application/GetAllApplications");
+                // Tüm companyApplication verilerini çek
+                var response = await GenerateClient.Client.GetAsync("api/CompanyApplication/GetAllCompanyApplications");
+                if (response.IsSuccessStatusCode)
+                {
+                    var data = await response.Content.ReadAsStringAsync();
+                    companyApplications = JsonConvert.DeserializeObject<List<CompanyApplicationDto>>(data);
+                }
+
+                // Tüm application verilerini çek
+                response = await GenerateClient.Client.GetAsync("api/Application/GetAllApplications");
                 if (response.IsSuccessStatusCode)
                 {
                     var data = await response.Content.ReadAsStringAsync();
                     applications = JsonConvert.DeserializeObject<List<ApplicationDto>>(data);
                 }
+
+                // Tüm company verilerini çek
+                response = await GenerateClient.Client.GetAsync("api/Company/GetAllCompanies");
+                if (response.IsSuccessStatusCode)
+                {
+                    var data = await response.Content.ReadAsStringAsync();
+                    companies = JsonConvert.DeserializeObject<List<CompanyDto>>(data);
+
+                    // Eşleşen Company ve Applicationları bul
+                    foreach (var company in companies)
+                    {
+                        var matchingCompanyApps = companyApplications.Where(ca => ca.CompanyId == company.Id).ToList();
+                        foreach (var ca in matchingCompanyApps)
+                        {
+                            // Eşleşen application'ı bul ve ekle
+                            var matchingApplication = applications.FirstOrDefault(app => app.Id == ca.ApplicationId);
+                            if (matchingApplication != null)
+                            {
+                                // Bu application'ı tekrar göndermek için ekleyebiliriz.
+                                applications.Add(matchingApplication);
+                            }
+                        }
+                    }
+                }
             }
             // TenantAdmin ise sadece kendi tenantına ait uygulamaları getirelim
             else if (isTenantAdmin)
             {
-                var tenantId = User.Claims.FirstOrDefault(c => c.Type == "TenantId")?.Value;
-                var response = await GenerateClient.Client.GetAsync($"api/Application/GetApplicationsByTenant/{tenantId}");
+                var userName = User.Identity.Name;
+                var response = await GenerateClient.Client.GetAsync($"api/Application/GetApplicationByUserName/{userName}");
                 if (response.IsSuccessStatusCode)
                 {
                     var data = await response.Content.ReadAsStringAsync();
-                    applications = JsonConvert.DeserializeObject<List<ApplicationDto>>(data);
+                    var applicationList = JsonConvert.DeserializeObject<List<ApplicationDto>>(data);
+                    foreach (var application in applicationList)
+                    {
+                        applications.Add(application);
+                    }
                 }
             }
             // User ise sadece bulunduğu applicationu getirelim
@@ -105,44 +144,64 @@ namespace UwingoIdentityMVC.Controllers
             }
 
 
-            return View(Tuple.Create(applications, roles));
+            return View(Tuple.Create(companies, applications, roles));
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create(UserRegistrationDto myUser)
+        public async Task<IActionResult> Create(UserRegistrationDto myUser, Guid companyId, Guid applicationId)
         {
             if (!User.HasClaim(c => c.Type == "User" && c.Value == "CreateUser"))
                 return StatusCode(403);
-
+            var userName = User.Identity.Name;
             var apiRegister = "api/Authentication/register";
-            var apiGetTenantId = $"api/Authentication/GetApplicationIdByUserName/{User.Identity.Name}";
+
             IEnumerable<UserDto> myUsers;
-            // Kullanıcı adından ApplicationId'yi al
-            HttpResponseMessage appResponse = await GenerateClient.Client.GetAsync(apiGetTenantId);
 
-            if (appResponse.IsSuccessStatusCode)
+            if (User.IsInRole("Admin")) //İstek gönderen kişi adminse tüm CompanyApplicationları çekip, parametre olarak gelen company ve applicationID ile eşleşen CompanyApplicationId'yi alıp yeni kullanıcıya atıyor.
             {
-                var appData = await appResponse.Content.ReadAsStringAsync();
-                var applicationId = JsonConvert.DeserializeObject<Guid>(appData);
+                var companyApplications = $"api/CompanyApplication/GetAllCompanyApplications";
+                HttpResponseMessage appResponse = await GenerateClient.Client.GetAsync(companyApplications);
 
-                // applicationId'yi UserRegistrationDto'ya ata
-                myUser.ApplicationId = applicationId;
-
-                // Kullanıcıyı kaydet
-                HttpResponseMessage registerResponse = await GenerateClient.Client.PostAsJsonAsync(apiRegister, myUser);
-
-                if (registerResponse.IsSuccessStatusCode)
+                if (appResponse.IsSuccessStatusCode)
                 {
-                    myUsers = await GetUser(1, 10);
-                    return View("Index", myUsers);
+                    var appData = await appResponse.Content.ReadAsStringAsync();
+                    var allCompanyApplications = JsonConvert.DeserializeObject<List<CompanyApplicationDto>>(appData);
+
+                    myUser.CompanyApplicationId = allCompanyApplications.Where(ca => ca.ApplicationId == applicationId && ca.CompanyId == companyId).FirstOrDefault().Id;
+                }
+            }
+            else // Eğer admin değisle istek gönderen kişinin ait olduğu companyApplicationId çekiliyor.
+            {
+                var caIdApi = $"api/CompanyApplication/GetCompanyApplicationIdByUserName/{userName}";
+                HttpResponseMessage caResponse = await GenerateClient.Client.GetAsync(caIdApi);
+                var ca = await caResponse.Content.ReadAsStringAsync();
+
+                var companyApplicationId = JsonConvert.DeserializeObject<Guid>(ca);
+
+                if (User.IsInRole("User")) myUser.CompanyApplicationId = companyApplicationId; // Eğer usersa sadece kendi companyApplicationuna ekleme yapabildiği için yeni usera direkt atanıyor
+                else // Eğer tenantAdminse o companye ait olan tüm companyApplicationlar çekiliyor, parametre olarak gönderilen ApplicationId ile eşleşen verinin CompanyApplicationId'si usera atanıyor.
+                {
+                    var caApi = $"api/CompanyApplication/GetCompanyApplicationsByUserName/{userName}";
+                    caResponse = await GenerateClient.Client.GetAsync(caApi);
+                    var data = await caResponse.Content.ReadAsStringAsync();
+
+                    List<CompanyApplicationDto> companyApplications = JsonConvert.DeserializeObject<List<CompanyApplicationDto>>(data);
+                    var caId = companyApplications.Where(ca => ca.ApplicationId == applicationId).FirstOrDefault().Id;
+                    myUser.CompanyApplicationId = caId;
                 }
 
-                else
-                    ViewBag.Message = "Kullanıcı kaydı başarısız oldu.";
-
             }
+
+            HttpResponseMessage registerResponse = await GenerateClient.Client.PostAsJsonAsync(apiRegister, myUser);
+
+            if (registerResponse.IsSuccessStatusCode)
+            {
+                myUsers = await GetUser(1, 10);
+                return View("Index", myUsers);
+            }
+
             else
-                ViewBag.Message = "applicationId alınamadı.";
+                ViewBag.Message = "Kullanıcı kaydı başarısız oldu.";
 
             myUsers = await GetUser(1, 10);
             return View("Index", myUsers);
@@ -348,5 +407,24 @@ namespace UwingoIdentityMVC.Controllers
             }
             return myUsers;
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetApplicationsByCompany(Guid companyId)
+        {
+            // Backend'deki API'ye istek gönder
+            var response = await GenerateClient.Client.GetAsync($"api/CompanyApplication/GetApplicationsByCompanyId/{companyId}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadAsStringAsync();
+                var applications = JsonConvert.DeserializeObject<List<ApplicationDto>>(data);
+                return Ok(applications);
+            }
+            else
+            {
+                return StatusCode((int)response.StatusCode, "Uygulamalar getirilirken bir hata oluştu.");
+            }
+        }
+
     }
 }
