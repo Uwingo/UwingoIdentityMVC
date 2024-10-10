@@ -11,7 +11,6 @@ namespace Entity.ModelsDto
         public int CompanyCount { get; set; }
         public int CompanyApplicationCount { get; set; }
         public int ApplicationCount { get; set; }
-        public int PermissionCount { get; set; }
         public int RoleCount { get; set; }
         public int TenantCount { get; set; }
         public int UserCount { get; set; }
