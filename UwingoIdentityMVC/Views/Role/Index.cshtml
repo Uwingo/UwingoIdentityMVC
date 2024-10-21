@@ -1,4 +1,4 @@
-﻿@model IEnumerable<RoleDto>
+﻿@* @model IEnumerable<RoleDto>
 
 @{
     ViewBag.Title = "Roller";
@@ -292,5 +292,300 @@
         function updatePageSize(pageSize) {
             window.location.href = `?pageNumber=1&pageSize=${pageSize}`;
         }
+    </script>
+}
+ *@
+
+@model IEnumerable<RoleDto>
+
+@{
+    ViewBag.Title = "Roller";
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Roller</h4>
+                <p class="text-muted mb-0">
+                    Aktif Roller
+                </p>
+            </div>
+
+            <input type="hidden" id="companyId" value="@ViewBag.CompanyId" />
+            <input type="hidden" id="applicationId" value="@ViewBag.ApplicationId" />
+
+            @if (User.HasClaim(c => c.Type == "Role" && c.Value == "CreateRole"))
+            {
+                <div class="card-body">
+                    <div class="button-items">
+                        <a asp-action="Create" class="btn btn-secondary buttons-collection dropdown-toggle buttons-colvis">Yeni Rol Ekle</a>
+                    </div>
+                </div>
+            }
+
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="companySelect">Şirket Seç</label>
+                    <select id="companySelect" class="form-control" @((User.IsInRole("TenantAdmin") || User.IsInRole("User")) ? "disabled" : "")>
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <option value="">Şirket Seçin</option>
+                        }
+                        @if (ViewBag.Companies != null)
+                        {
+                            foreach (var company in ViewBag.Companies)
+                            {
+                                <option value="@company.Id">@company.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="applicationSelect">Uygulama Seç</label>
+                    <select id="applicationSelect" class="form-control" @(User.IsInRole("User") ? "disabled" : "")>
+                        @if (User.IsInRole("Admin") || User.IsInRole("TenantAdmin"))
+                        {
+                            <option value="">Uygulama Seçin</option>
+                        }
+                        @if (ViewBag.Applications != null)
+                        {
+                            foreach (var app in ViewBag.Applications)
+                            {
+                                <option value="@app.Id">@app.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button id="filterRolesBtn" class="btn btn-primary">Göster</button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div id="rolesTableContainer">
+                    @* @await Html.PartialAsync("_rolesTablePartial", Model) *@
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="roleClaimsModal" tabindex="-1" role="dialog" aria-labelledby="roleClaimsModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="roleClaimsModalLabel">Rol Yetkilerini Düzenle</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="roleClaimsForm">
+                    <div id="roleClaimsList">
+                        <!-- Role yetkileri burada listelenecek -->
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Kapat</button>
+                @if (User.HasClaim(c => c.Type == "Role" && c.Value == "EditRoleClaims"))
+                {
+                    <button type="button" class="btn btn-primary" onclick="updateRoleClaims()">Kaydet</button>
+                }
+                @if (User.HasClaim(c => c.Type == "Role" && c.Value == "GetRoleClaims") && !User.HasClaim(c => c.Type == "Role" && c.Value == "EditRoleClaims"))
+                {
+                    <button type="button" disabled class="btn btn-primary" onclick="updateRoleClaims()">Kaydet</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function deleteRole(id) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: "Bu kaydı silmek istediğinizden emin misiniz?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet, Sil!',
+                cancelButtonText: 'Hayır, İptal Et',
+                reverseButtons: true
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("Delete", "Role")/' + id,
+                        type: 'POST',
+                        success: function (response) {
+                            Swal.fire(
+                                'Silindi!',
+                                'Kayıt başarıyla silindi.',
+                                'success'
+                            ).then(() => {
+                                window.location.reload();
+                            });
+                        },
+                        error: function () {
+                            Swal.fire(
+                                'Hata!',
+                                'Silme işlemi sırasında bir hata oluştu.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+
+        let currentRoleId = null; // Global variable to store current roleId
+
+        function openRoleClaimsModal(roleId) {
+            var companyId = $('#companySelect').val();  // Şirket ID'si
+            var applicationId = $('#applicationSelect').val();  // Uygulama ID'si
+
+            if (!companyId || !applicationId) {
+                alert('Lütfen şirket ve uygulama seçiniz.');
+                return;
+            }
+
+            currentRoleId = roleId; // Set the current roleId
+            $.ajax({
+                url: '@Url.Action("GetRoleClaims", "Role")' + '?roleId=' + roleId + '&companyId=' + companyId + '&applicationId=' + applicationId,
+                type: 'GET',
+                success: function (response) {
+                    $('#roleClaimsList').html(response);
+                    $('#roleClaimsModal').modal('show');
+                },
+                error: function () {
+                    Swal.fire(
+                        'Hata!',
+                        'Yetkiler alınırken bir hata oluştu.',
+                        'error'
+                    );
+                }
+            });
+        }
+
+        function updateRoleClaims() {
+            var form = $('#roleClaimsForm');
+            var formDataArray = form.serializeArray();
+            var claims = [];
+
+            // Parse form data into claims array
+            formDataArray.forEach(function (item) {
+                if (item.name.startsWith("claimValue")) {
+                    // Find the corresponding claim type using the claim value
+                    var claimValue = item.value;
+                    var claimTypeInput = form.find(`input[name='claimType_${claimValue}']`).val();
+
+                    claims.push({
+                        Type: claimTypeInput, // Set the correct ClaimType
+                        Value: claimValue // The ClaimValue from the checkbox
+                    });
+                }
+            });
+
+            // Ensure currentRoleId is being used here
+            $.ajax({
+                url: '@Url.Action("UpdateRoleClaims", "Role")', // Frontend controller endpoint
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ roleId: currentRoleId, claims: claims }), // Use currentRoleId and claims
+                success: function (response) {
+                    Swal.fire(
+                        'Güncellendi!',
+                        response,
+                        'success'
+                    ).then(() => {
+                        $('#roleClaimsModal').modal('hide');
+                    });
+                },
+                error: function (xhr) {
+                    let errorMessage = 'Yetkiler güncellenirken bir hata oluştu.';
+                    if (xhr.responseText) {
+                        errorMessage = xhr.responseText;
+                    }
+                    Swal.fire(
+                        'Hata!',
+                        errorMessage,
+                        'error'
+                    );
+                }
+            });
+        }
+
+        // Kullanıcılar göster butonuna tıklama olayı
+        $('#filterRolesBtn').on('click', function () {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+            var pageSize = 10; // Varsayılan sayfa boyutu
+
+            if (companyId && applicationId) {
+                loadRoles(companyId, applicationId, 1, pageSize); // Varsayılan olarak 1. sayfa ve 10 kayıt göster
+            } else {
+                alert('Lütfen hem şirket hem de uygulama seçiniz.');
+            }
+        });
+
+        function editRole(id) {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+
+            if (!companyId || !applicationId) {
+                alert('Lütfen şirket ve uygulama seçiniz.');
+                return;
+            }
+
+            window.location.href = '@Url.Action("Edit", "Role")' + '?id=' + id + '&companyId=' + companyId + '&applicationId=' + applicationId;
+        }
+
+        // Sayfa boyutunu güncelleyen fonksiyon
+        function updatePageSize(pageSize) {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+            var pageNumber = 1; // Sayfa boyutunu değiştirdiğimizde 1. sayfaya döneceğiz
+
+            if (companyId && applicationId) {
+                loadRoles(companyId, applicationId, pageNumber, pageSize);
+            }
+        }
+
+        // Dinamik olarak kullanıcıları yükleyen fonksiyon
+        const loadRoles = (companyId, applicationId, pageNumber, pageSize) => {
+            $.ajax({
+                url: '/Role/GetRolesByCompanyAndApplication',
+                type: 'POST',
+                data: {
+                    companyId: companyId,
+                    applicationId: applicationId,
+                    pageNumber: pageNumber,
+                    pageSize: pageSize
+                },
+                success: (response) => {
+                    $('#rolesTableContainer').html(response);
+                },
+                error: () => {
+                    alert("Veriler yüklenemedi.");
+                }
+            });
+        };
+
+        // Sayfa numarası butonlarına tıklama olayı
+        $('body').on('click', '.page-link', function () {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+            var pageNumber = $(this).data('pagenumber');
+            var pageSize = $('#pageSizeSelect').val();
+
+            loadRoles(companyId, applicationId, pageNumber, pageSize);
+        });
+
+        // Sayfa boyutu değiştiğinde olay
+        $('body').on('change', '#pageSizeSelect', function () {
+            var pageSize = $(this).val();
+            updatePageSize(pageSize);
+        });
     </script>
 }

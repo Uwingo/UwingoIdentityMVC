@@ -79,7 +79,6 @@
                                 <thead>
                                     <tr>
                                         <th>Ad</th>
-                                        <th>Veritabanı Bağlantısı</th>
                                         @if (User.HasClaim(c => c.Type == "Application" && c.Value == "EditApplication") ||
                                         User.HasClaim(c => c.Type == "Application" && c.Value == "DeleteApplication"))
                                         {
@@ -92,7 +91,6 @@
                                     {
                                         <tr>
                                             <td>@app.Name</td>
-                                            <td>@app.DbConnection</td>
                                             @if (User.HasClaim(c => c.Type == "Application" && c.Value == "EditApplication") ||
                                            User.HasClaim(c => c.Type == "Application" && c.Value == "DeleteApplication"))
                                             {

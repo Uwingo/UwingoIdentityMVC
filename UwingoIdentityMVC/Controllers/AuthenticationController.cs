@@ -20,21 +20,39 @@ namespace UwingoIdentityMVC.Controllers
             _logger = logger;
         }
 
-        public IActionResult Login()
+        [HttpGet]
+        public async Task<IActionResult> Login()
         {
+            var apiClient = GenerateClient.Client;
 
-            if (User.Identity.IsAuthenticated && GenerateClient.Client.DefaultRequestHeaders.Authorization != null)
+            // Company ve Application bilgilerini al
+            var companyResponse = await apiClient.GetAsync("api/Company/GetAllCompaniesForLogin");
+            var applicationResponse = await apiClient.GetAsync("api/Application/GetAllApplicationsForLogin");
+
+            if (companyResponse.IsSuccessStatusCode && applicationResponse.IsSuccessStatusCode)
             {
-                TempData["AlreadyLoggedIn"] = "Zaten giriş yaptınız.";
-                return RedirectToAction("Index", "Home");
+                var companyData = await companyResponse.Content.ReadAsStringAsync();
+                var applicationData = await applicationResponse.Content.ReadAsStringAsync();
+
+                var companies = JsonConvert.DeserializeObject<List<CompanyDto>>(companyData);
+                var applications = JsonConvert.DeserializeObject<List<ApplicationDto>>(applicationData);
+
+                return View(new Tuple<List<CompanyDto>, List<ApplicationDto>>(companies, applications));
             }
+
+            TempData["Error"] = "Şirket ve uygulama bilgileri yüklenemedi.";
             return View();
         }
-
 
         [HttpPost]
         public async Task<IActionResult> Login(UserLoginDto user)
         {
+            if (user.ApplicationId == Guid.Empty || user.CompanyId == Guid.Empty)
+            {
+                ModelState.AddModelError("", "Lütfen bir şirket ve uygulama seçiniz.");
+                return RedirectToAction("Login");
+            }
+
             var api = "api/Authentication/login";
             TokenDto token = new TokenDto();
 
@@ -62,8 +80,10 @@ namespace UwingoIdentityMVC.Controllers
                     HttpResponseMessage claimResponse = await GenerateClient.Client.GetAsync(myUrl);
                     var myClaimData = await claimResponse.Content.ReadFromJsonAsync<List<ClaimDto>>();
 
-
                     var claims = myClaimData.Select(c => new Claim(c.Type, c.Value)).ToList();
+                    claims.Add(new Claim("CompanyId", user.CompanyId.ToString())); // CompanyId ekle
+                    claims.Add(new Claim("ApplicationId", user.ApplicationId.ToString())); // ApplicationId ekle
+
                     var authProperties = new AuthenticationProperties
                     {
                         IsPersistent = true
@@ -75,6 +95,8 @@ namespace UwingoIdentityMVC.Controllers
                     CookieAuthenticationDefaults.AuthenticationScheme,
                     new ClaimsPrincipal(userIdentity),
                     authProperties);
+
+                    return RedirectToAction("Index", "Home");
                 }
             }
             else

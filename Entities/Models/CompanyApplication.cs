@@ -15,5 +15,6 @@ namespace Entity.Models
         [ForeignKey("ApplicationId")]
         public Guid ApplicationId { get; set; }
         public Application Application { get; set; }
+        public string DbConnection { get; set; }
     }
 }

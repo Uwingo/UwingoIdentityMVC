@@ -2,6 +2,7 @@
 using Entity.ModelsDto;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Newtonsoft.Json;
 using System.Net.Http.Headers;
 using System.Security.Claims;
@@ -17,20 +18,137 @@ namespace UwingoIdentityMVC.Controllers
         {
             _logger = logger;
         }
-        public async Task<IActionResult> Index(int pageNumber = 1, int pageSize = 10)
+
+        public async Task<IActionResult> Index(Guid companyId, Guid applicationId, int pageNumber = 1, int pageSize = 10)
         {
-            if (!User.HasClaim(c => c.Type == "User" && c.Value == "GetAllUsers"))
-                return StatusCode(403);
-            // Kullanıcının rolünü kontrol et
-            IEnumerable<UserDto> myUsers = await GetUser(pageNumber, pageSize);
+            List<CompanyDto> companyList = new List<CompanyDto>();
+            List<ApplicationDto> applicationList = new List<ApplicationDto>();
+            // Kullanıcının gerekli yetkilerini kontrol et
+            bool hasGetAllCompanies = User.HasClaim(c => c.Type == "Company" && c.Value == "GetAllCompanies");
+            bool hasGetAllApplications = User.HasClaim(c => c.Type == "Application" && c.Value == "GetAllApplications");
+            bool hasGetAllUsers = User.HasClaim(c => c.Type == "User" && c.Value == "GetAllUsers");
 
-            // Eğer myUsers boş değilse, View'a kullanıcıları gönder
-            if (myUsers != null)
-                return View(myUsers);
+            // Eğer companyId veya applicationId gönderilmemişse, tüm kullanıcıları listelemek yerine şirket ve uygulama seçimi yapılmasını isteyebiliriz.
+            if (companyId == Guid.Empty || applicationId == Guid.Empty)
+            {
+                if (hasGetAllCompanies)
+                {
+                    ViewBag.Companies = await GetCompanies(); // Şirketleri view'a gönder
+                    ViewBag.Applications = await GetApplications(); // Uygulamaları view'a gönder
+                }
+                else if (hasGetAllApplications || User.IsInRole("TenantAdmin"))
+                {
+                    var companyIdClaim = User.Claims.FirstOrDefault(c => c.Type == "CompanyId");
+                    var result = await GetApplicationsByCompany(Guid.Parse(companyIdClaim.Value));
+                    if (result is OkObjectResult okResult && okResult.Value is IEnumerable<ApplicationDto> applications)
+                    {
+                        ViewBag.Applications = applications; // Doğrudan ViewBag'e ata
+                    }
+                    CompanyDto company = new CompanyDto { Id = Guid.Parse(companyIdClaim.Value), Name = "Şirketiniz" };
+                    companyList.Add(company);
+                    ViewBag.Companies = companyList;
+                }
+                else if (hasGetAllUsers)
+                {
+                    var companyIdClaim = User.Claims.FirstOrDefault(c => c.Type == "CompanyId");
+                    CompanyDto company = new CompanyDto { Id = Guid.Parse(companyIdClaim.Value), Name = "Şirketiniz" };
+                    companyList.Add(company);
+                    ViewBag.Companies = companyList;
 
-            // Eğer API çağrısı başarısız olursa veya kullanıcılar bulunamazsa, boş bir View döndür
-            return View(new List<UserDto>());
+                    var applicationIdClaim = User.Claims.FirstOrDefault(c => c.Type == "ApplicationId");
+                    ApplicationDto application = new ApplicationDto { Id = Guid.Parse(applicationIdClaim.Value), Name = "Uygulamanız"};
+                    applicationList.Add(application);
+                    ViewBag.Applications = applicationList;
+                }
+
+                return View(); // Şirket ve uygulama seçim ekranı
+            }
+
+            // Eğer companyId ve applicationId seçilmişse, API çağrısını yaparak kullanıcıları getiriyoruz
+            IEnumerable<UwingoUserDto> users = (IEnumerable<UwingoUserDto>)await GetUsersByCompanyAndApplication(companyId, applicationId, pageNumber, pageSize);
+
+            // ViewBag'e gerekli bilgileri gönderiyoruz
+            ViewBag.PageNumber = pageNumber;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalRecords = users?.Count() ?? 0;
+
+            // Şirket ve uygulama bilgilerini yeniden view'a göndermek için
+            ViewBag.CompanyId = companyId;
+            ViewBag.ApplicationId = applicationId;
+
+            return View(users); // Kullanıcılar listesi ile view'i döndürüyoruz
         }
+
+
+        private async Task<List<CompanyDto>> GetCompanies()
+        {
+
+            var apiUC = $"api/Company/GetAllCompanies";
+            HttpResponseMessage httpResponse = await GenerateClient.Client.GetAsync(apiUC);
+
+            if (httpResponse.IsSuccessStatusCode)
+            {
+                var companies = await httpResponse.Content.ReadAsStringAsync();
+                List<CompanyDto> companyList = JsonConvert.DeserializeObject<List<CompanyDto>>(companies);
+
+                return companyList;
+            }
+            return null;
+        }
+
+        private async Task<List<ApplicationDto>> GetApplications()
+        {
+            var apiUC = $"api/Application/GetAllApplications";
+            HttpResponseMessage httpResponse = await GenerateClient.Client.GetAsync(apiUC);
+
+            if (httpResponse.IsSuccessStatusCode)
+            {
+                var application = await httpResponse.Content.ReadAsStringAsync();
+                List<ApplicationDto> applicationList = JsonConvert.DeserializeObject<List<ApplicationDto>>(application);
+
+                return applicationList;
+            }
+            return null;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> GetUsersByCompanyAndApplication(Guid companyId, Guid applicationId, int pageNumber = 1, int pageSize = 10)
+        {
+            try
+            {
+                if (!User.HasClaim(c => c.Type == "User" && c.Value == "GetAllUsers"))
+                {
+                    return StatusCode(403);
+                }
+
+                // API endpointine istek gönderiliyor
+                var apiUrl = $"api/Authentication/GetUsersByCompanyApplication?companyId={companyId}&applicationId={applicationId}&pageNumber={pageNumber}&pageSize={pageSize}";
+                HttpResponseMessage httpResponse = await GenerateClient.Client.GetAsync(apiUrl);
+
+                if (httpResponse.IsSuccessStatusCode)
+                {
+                    var responseContent = await httpResponse.Content.ReadAsStringAsync();
+                    List<UwingoUserDto> users = JsonConvert.DeserializeObject<List<UwingoUserDto>>(responseContent);
+
+                    ViewBag.TotalRecords = users.Count;
+                    ViewBag.PageNumber = pageNumber;
+                    ViewBag.PageSize = pageSize;
+
+                    return PartialView("_usersTablePartial", users);
+                }
+                else
+                {
+                    _logger.LogError("Kullanıcılar alınırken hata oluştu. Status Code: {0}", httpResponse.StatusCode);
+                    return StatusCode((int)httpResponse.StatusCode, "Kullanıcıları getirirken bir hata oluştu.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("GetUsersByCompanyAndApplication metodunda hata: {Message}", ex.Message);
+                return StatusCode(500, "Internal server error");
+            }
+        }
+
 
 
         public async Task<IActionResult> Create()
@@ -152,6 +270,11 @@ namespace UwingoIdentityMVC.Controllers
         {
             if (!User.HasClaim(c => c.Type == "User" && c.Value == "CreateUser"))
                 return StatusCode(403);
+
+            List<ApplicationDto> applications = new List<ApplicationDto>();
+            List<CompanyDto> companies = new List<CompanyDto>();
+            List<RoleDto> roles = new List<RoleDto>();
+
             var userName = User.Identity.Name;
             var apiRegister = "api/Authentication/register";
 
@@ -194,19 +317,31 @@ namespace UwingoIdentityMVC.Controllers
 
             HttpResponseMessage registerResponse = await GenerateClient.Client.PostAsJsonAsync(apiRegister, myUser);
 
-            if (registerResponse.IsSuccessStatusCode)
+            if (User.IsInRole("Admin"))
             {
-                myUsers = await GetUser(1, 10);
-                return View("Index", myUsers);
+                roles.Add(new RoleDto { Id = "9970bb6b-2a25-4380-b695-c523b9c0476f", Name = "Admin" });
+                roles.Add(new RoleDto { Id = "07434bdc-8ce9-450f-ac5c-e53308022a28", Name = "TenantAdmin" });
+                roles.Add(new RoleDto { Id = "93997af7-441d-41ab-bee9-5ca5dc42100d", Name = "User" });
+            }
+            else if (User.IsInRole("TenantAdmin"))
+            {
+                roles.Add(new RoleDto { Id = "07434bdc-8ce9-450f-ac5c-e53308022a28", Name = "TenantAdmin" });
+                roles.Add(new RoleDto { Id = "93997af7-441d-41ab-bee9-5ca5dc42100d", Name = "User" });
+            }
+            else if (User.IsInRole("User"))
+            {
+                roles.Add(new RoleDto { Id = "93997af7-441d-41ab-bee9-5ca5dc42100d", Name = "User" });
             }
 
-            else
-                ViewBag.Message = "Kullanıcı kaydı başarısız oldu.";
 
-            myUsers = await GetUser(1, 10);
-            return View("Index", myUsers);
+            companies = await GetCompanies(); // Şirketleri view'a gönder
+            applications = await GetApplications(); // Uygulamaları view'a gönder
+
+
+            return View(Tuple.Create(companies, applications, roles)); // Şirket ve uygulama seçim ekranı
         }
-        public async Task<IActionResult> Edit(string id)
+
+        public async Task<IActionResult> Edit(string id, Guid companyId, Guid applicationId)
         {
             if (!User.HasClaim(c => c.Type == "User" && c.Value == "EditUser"))
                 return StatusCode(403);
@@ -225,10 +360,11 @@ namespace UwingoIdentityMVC.Controllers
             return RedirectToAction("Index");
         }
 
+
         [HttpPost]
-        public async Task<IActionResult> Edit([FromBody] UserDto myUser)
+        public async Task<IActionResult> Edit([FromBody] UserDto myUser, [FromQuery] Guid companyId, [FromQuery] Guid applicationId)
         {
-            if (!User.HasClaim(c => c.Type == "User" && c.Value == "UpdateUser"))
+            if (!User.HasClaim(c => c.Type == "User" && c.Value == "EditUser"))
                 return StatusCode(403);
 
             var apiUpdateUser = $"api/Authentication/UpdateUser";
@@ -243,23 +379,27 @@ namespace UwingoIdentityMVC.Controllers
             return View(myUser);
         }
 
-        public async Task<IActionResult> Delete(Guid id)
+
+        [HttpPost]
+        public async Task<IActionResult> Delete(string id, Guid companyId, Guid applicationId)
         {
             if (!User.HasClaim(c => c.Type == "User" && c.Value == "DeleteUser"))
                 return StatusCode(403);
 
             var apiDeleteUser = $"api/Authentication/DeleteUser/{id}";
-
             HttpResponseMessage deleteResponse = await GenerateClient.Client.DeleteAsync(apiDeleteUser);
 
             if (deleteResponse.IsSuccessStatusCode)
-                return RedirectToAction("Index");
-            else
             {
-                ViewBag.Message = "Kullanıcı silme işlemi başarısız oldu.";
                 return RedirectToAction("Index");
             }
+            else
+            {
+                _logger.LogError($"User deletion failed for ID {id}. Status Code: {deleteResponse.StatusCode}");
+                return StatusCode((int)deleteResponse.StatusCode, "Kullanıcı silinirken bir hata oluştu.");
+            }
         }
+
 
         public async Task<IActionResult> GetAllUserClaims()
         {
@@ -280,12 +420,12 @@ namespace UwingoIdentityMVC.Controllers
         }
 
 
-        public async Task<IActionResult> GetUserClaims(string userId)
+        public async Task<IActionResult> GetUserClaims(string userId, Guid companyId, Guid applicationId)
         {
             if (!User.HasClaim(c => c.Type == "User" && c.Value == "GetUserClaims"))
                 return StatusCode(403);
             // Tüm mevcut claim'leri çekin
-            var apiAllClaims = $"api/Authentication/GetAllUserClaims";
+            var apiAllClaims = $"api/Authentication/GetAllUserClaims/{companyId}/{applicationId}";
             HttpResponseMessage allClaimsResponse = await GenerateClient.Client.GetAsync(apiAllClaims);
 
             List<ClaimDto> allClaims = new List<ClaimDto>();

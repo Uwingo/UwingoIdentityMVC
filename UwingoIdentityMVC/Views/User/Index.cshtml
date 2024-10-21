@@ -1,4 +1,4 @@
-﻿ @model IEnumerable<UserDto>
+﻿@*  @model IEnumerable<UserDto>
 
 @{
     ViewData["Title"] = "Kullanıcılar";
@@ -291,6 +291,744 @@
 
         function updatePageSize(pageSize) {
             window.location.href = `?pageNumber=1&pageSize=${pageSize}`;
+        }
+    </script>
+}
+ *@
+
+
+
+@* 
+ @model IEnumerable<UserDto>
+@{
+    var editUserUrl = Url.Action("Edit", "User");
+    var deleteUserUrl = Url.Action("Delete", "User");
+    var getUserClaimsUrl = Url.Action("GetUserClaims", "User");
+}
+@{
+    ViewData["Title"] = "Kullanıcılar";
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Kullanıcılar</h4>
+                <p class="text-muted mb-0">
+                    Şirketlerimiz Bünyesindeki Tüm Kullanıcılar
+                </p>
+            </div>
+
+            <!-- Şirket ve Uygulama seçimi -->
+            <div class="card-body">
+                <div class="form-group mb-2">
+                    <label for="company">Company</label>
+                    <select id="company" class="form-control select2">
+                        <option value="">Select Company</option>
+                        <!-- Şirketler buraya eklenecek -->
+                    </select>
+                </div>
+                <div class="form-group mb-2">
+                    <label for="application">Application</label>
+                    <select id="application" class="form-control select2">
+                        <option value="">Select Application</option>
+                        <!-- Uygulamalar buraya eklenecek -->
+                    </select>
+                </div>
+                <div class="form-group mb-0 row">
+                    <div class="col-12">
+                        <button id="showUsers" class="btn btn-primary w-100 waves-effect waves-light" type="button">
+                            Göster <i class="fas fa-search ms-1"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div id="datatable-buttons_wrapper" class="dataTables_wrapper dt-bootstrap5 no-footer">
+                    <!-- Verileri gösteren kısım -->
+                    <div class="row">
+                        <div class="col-sm-12 col-md-6">
+                            <!-- Show entries dropdown -->
+                            <div class="dataTables_length" id="datatable-buttons_length">
+                                <label>
+                                    Show
+                                    <select name="datatable-buttons_length" aria-controls="datatable-buttons" class="form-select form-select-sm" onchange="updatePageSize(this.value)">
+                                        @if (ViewBag.PageSize == 10)
+                                        {
+                                            <option selected value="10">10</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="10">10</option>
+                                        }
+
+                                        @if (ViewBag.TotalRecords >= 20)
+                                        {
+                                            @if (ViewBag.PageSize == 20)
+                                            {
+                                                <option selected value="20">20</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="20">20</option>
+                                            }
+                                        }
+                                        @if (ViewBag.TotalRecords >= 50)
+                                        {
+                                            @if (ViewBag.PageSize == 50)
+                                            {
+                                                <option selected value="50">50</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="50">50</option>
+                                            }
+                                        }
+                                        @if (ViewBag.TotalRecords >= 100)
+                                        {
+                                            @if (ViewBag.PageSize == 100)
+                                            {
+                                                <option selected value="100">100</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="100">100</option>
+                                            }
+                                        }
+                                    </select> entries
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-sm-12">
+                            <div id="userTable">
+                                <!-- Kullanıcı tablosu burada listelenecek -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-sm-12 col-md-5">
+                            <div class="dataTables_info" id="datatable-buttons_info" role="status" aria-live="polite">
+                                Showing @ViewBag.PageNumber to @ViewBag.PageSize of @ViewBag.TotalRecords entries
+                            </div>
+                        </div>
+                        <div class="col-sm-12 col-md-7">
+                            <!-- Sayfalama kontrolleri -->
+                            <div class="dataTables_paginate paging_simple_numbers" id="datatable-buttons_paginate">
+                                <ul class="pagination">
+                                    @for (int i = 1; i <= Math.Ceiling((double)ViewBag.TotalRecords / ViewBag.PageSize); i++)
+                                    {
+                                        <li class="paginate_button page-item @(ViewBag.PageNumber == i ? "active" : "")">
+                                            <a class="page-link" href="?pageNumber=@i&pageSize=@ViewBag.PageSize">@i</a>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            $('.select2').select2();
+
+            // Şirket ve Uygulama seçimi yapıldıktan sonra kullanıcıları listeleme
+            $('#showUsers').click(function () {
+                var companyId = $('#company').val();
+                var applicationId = $('#application').val();
+
+                if (companyId && applicationId) {
+                    $.ajax({
+                        url: '/Authentication/GetUsersByCompanyAndApplication',
+                        type: 'POST',
+                        data: {
+                            companyId: companyId,
+                            applicationId: applicationId,
+                            pageNumber: 1,
+                            pageSize: 10
+                        },
+                        success: function (users) {
+                            var userList = '<table id="datatable-buttons" class="table table-striped table-bordered dt-responsive nowrap">' +
+                                '<thead><tr><th>Ad</th><th>Soyad</th><th>Kullanıcı Adı</th><th>E-posta</th><th>Telefon</th><th>İşlemler</th></tr></thead><tbody>';
+
+                            users.forEach(function (user) {
+                                userList += '<tr><td>' + user.firstName + '</td><td>' + user.lastName + '</td><td>' + user.userName + '</td><td>' + user.email + '</td><td>' + user.phoneNumber + '</td>';
+                                userList += '<td style="text-align:end">';
+                                userList += '<a href="' + '@editUserUrl' + '?id=' + user.id + '" class="las la-pen text-secondary font-16"></a>';
+                                userList += '<a href="javascript:void(0);" class="las la-trash-alt text-secondary font-16" onclick="deleteUser(\'' + user.id + '\')"></a>';
+                                userList += '<a href="javascript:void(0);" class="las la-lock text-secondary font-16" onclick="openClaimsModal(\'' + user.id + '\')"></a>';
+                                userList += '</td></tr>';
+                            });
+
+                            userList += '</tbody></table>';
+                            $('#userTable').html(userList);
+                        },
+                        error: function () {
+                            Swal.fire(
+                                'Hata!',
+                                'Kullanıcılar alınırken bir hata oluştu.',
+                                'error'
+                            );
+                        }
+                    });
+                } else {
+                    Swal.fire(
+                        'Uyarı!',
+                        'Lütfen bir Şirket ve Uygulama seçiniz.',
+                        'warning'
+                    );
+                }
+            });
+        });
+
+        function deleteUser(id) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: "Bu kaydı silmek istediğinizden emin misiniz?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet, Sil!',
+                cancelButtonText: 'Hayır, İptal Et',
+                reverseButtons: true
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("Delete", "User")/' + id,
+                        type: 'POST',
+                        success: function (response) {
+                            Swal.fire(
+                                'Silindi!',
+                                'Kayıt başarıyla silindi.',
+                                'success'
+                            ).then(() => {
+                                window.location.reload();
+                            });
+                        },
+                        error: function () {
+                            Swal.fire(
+                                'Hata!',
+                                'Silme işlemi sırasında bir hata oluştu.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+
+        function openClaimsModal(userId) {
+            currentUserId = userId; // Set the current userId
+            $.ajax({
+                url: '@Url.Action("GetUserClaims", "User")' + '?userId=' + userId,
+                type: 'GET',
+                success: function (response) {
+                    $('#claimsList').html(response);
+                    $('#claimsModal').modal('show');
+                },
+                error: function () {
+                    Swal.fire(
+                        'Hata!',
+                        'Yetkiler alınırken bir hata oluştu.',
+                        'error'
+                    );
+                }
+            });
+        }
+
+        function updateClaims() {
+            var form = $('#claimsForm');
+            var formDataArray = form.serializeArray();
+            var claims = [];
+
+            // Parse form data into claims array
+            formDataArray.forEach(function (item) {
+                if (item.name.startsWith("claimValue")) {
+                    var claimValue = item.value;
+                    var claimTypeInput = form.find(`input[name='claimType_${claimValue}']`).val();
+
+                    claims.push({
+                        Type: claimTypeInput,
+                        Value: claimValue
+                    });
+                }
+            });
+
+            $.ajax({
+                url: '@Url.Action("UpdateUserClaims", "User")',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ userId: currentUserId, claims: claims }),
+                success: function (response) {
+                    Swal.fire(
+                        'Güncellendi!',
+                        response,
+                        'success'
+                    ).then(() => {
+                        $('#claimsModal').modal('hide');
+                    });
+                },
+                error: function (xhr) {
+                    let errorMessage = 'Yetkiler güncellenirken bir hata oluştu.';
+                    if (xhr.responseText) {
+                        errorMessage = xhr.responseText;
+                    }
+                    Swal.fire(
+                        'Hata!',
+                        errorMessage,
+                        'error'
+                    );
+                }
+            });
+        }
+
+        function updatePageSize(pageSize) {
+            window.location.href = `?pageNumber=1&pageSize=${pageSize}`;
+        }
+    </script>
+} *@
+
+
+@* @{
+    ViewData["Title"] = "Kullanıcılar";
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Kullanıcılar</h4>
+                <p class="text-muted mb-0">
+                    Şirketlerimiz Bünyesindeki Tüm Kullanıcılar
+                </p>
+            </div>
+            <input type="hidden" id="companyId" value="@ViewBag.CompanyId" />
+            <input type="hidden" id="applicationId" value="@ViewBag.ApplicationId" />
+
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="companySelect">Şirket Seç</label>
+                    <select id="companySelect" class="form-control" @(ViewBag.Companies == null ? "disabled" : "")>
+                        <option value="">Şirket Seçin</option>
+                        @if (ViewBag.Companies != null)
+                        {
+                            foreach (var company in ViewBag.Companies)
+                            {
+                                <option value="@company.Id">@company.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="applicationSelect">Uygulama Seç</label>
+                    <select id="applicationSelect" class="form-control" @(ViewBag.Applications == null ? "disabled" : "")>
+                        <option value="">Uygulama Seçin</option>
+                        @if (ViewBag.Applications != null)
+                        {
+                            foreach (var app in ViewBag.Applications)
+                            {
+                                <option value="@app.Id">@app.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button id="filterUsersBtn" class="btn btn-primary">Göster</button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div id="usersTableContainer">
+                    <!-- Kullanıcılar burada Ajax ile yüklenecek -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Modal -->
+<div class="modal fade" id="claimsModal" tabindex="-1" role="dialog" aria-labelledby="claimsModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="claimsModalLabel">Yetkileri Düzenle</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="claimsForm">
+                    <div id="claimsList">
+                        <!-- Yetkiler burada listelenecek -->
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Kapat</button>
+                <button type="button" class="btn btn-primary" onclick="updateClaims()">Kaydet</button>
+            </div>
+        </div>
+    </div>
+</div> *@
+
+@{
+    ViewData["Title"] = "Kullanıcılar";
+}
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title">Kullanıcılar</h4>
+                <p class="text-muted mb-0">
+                    Şirketlerimiz Bünyesindeki Tüm Kullanıcılar
+                </p>
+            </div>
+            <input type="hidden" id="companyId" value="@ViewBag.CompanyId" />
+            <input type="hidden" id="applicationId" value="@ViewBag.ApplicationId" />
+
+            <div class="card-body">
+                <div class="form-group">
+                    <label for="companySelect">Şirket Seç</label>
+                    <select id="companySelect" class="form-control" @((User.IsInRole("TenantAdmin") || User.IsInRole("User")) ? "disabled" : "")>
+                        @if (User.IsInRole("Admin"))
+                        {
+                            <option value="">Şirket Seçin</option>
+                        }
+                        @if (ViewBag.Companies != null)
+                        {
+                            foreach (var company in ViewBag.Companies)
+                            {
+                                <option value="@company.Id">@company.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="applicationSelect">Uygulama Seç</label>
+                    <select id="applicationSelect" class="form-control" @(User.IsInRole("User") ? "disabled" : "")>
+                        @if (User.IsInRole("Admin") || User.IsInRole("TenantAdmin"))
+                        {
+                            <option value="">Uygulama Seçin</option>
+                        }
+                        @if (ViewBag.Applications != null)
+                        {
+                            foreach (var app in ViewBag.Applications)
+                            {
+                                <option value="@app.Id">@app.Name</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button id="filterUsersBtn" class="btn btn-primary">Göster</button>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div id="usersTableContainer">
+                    <!-- Kullanıcılar burada Ajax ile yüklenecek -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="claimsModal" tabindex="-1" role="dialog" aria-labelledby="claimsModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="claimsModalLabel">Yetkileri Düzenle</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="claimsForm">
+                    <div id="claimsList">
+                        <!-- Yetkiler burada listelenecek -->
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Kapat</button>
+                @if (User.HasClaim(c => c.Type == "User" && c.Value == "EditUserClaims"))
+                {
+                    <button type="button" class="btn btn-primary" onclick="updateClaims()">Kaydet</button>
+                }
+                @if (User.HasClaim(c => c.Type == "User" && c.Value == "GetUserClaims") && !User.HasClaim(c => c.Type == "User" && c.Value == "EditUserClaims"))
+                {
+                    <button type="button" disabled class="btn btn-primary" onclick="updateClaims()">Kaydet</button>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Kullanıcı bilgileri yüklendiğinde yetkilere göre işlemler
+            var hasGetAllCompanies = @Html.Raw(User.HasClaim(c => c.Type == "Company" && c.Value == "GetAllCompanies") ? "true" : "false");
+            var hasGetAllApplications = @Html.Raw(User.HasClaim(c => c.Type == "Application" && c.Value == "GetAllApplications") ? "true" : "false");
+            var hasGetAllUsers = @Html.Raw(User.HasClaim(c => c.Type == "User" && c.Value == "GetAllUsers") ? "true" : "false");
+
+            // Kullanıcı yetkilerine göre seçim alanlarını kontrol et
+            if (hasGetAllCompanies) {
+                $('#companySelect').prop('disabled', false);
+                $('#applicationSelect').prop('disabled', false);
+            } else if (hasGetAllApplications || User.IsInRole("TenantAdmin")) {
+                $('#companySelect').prop('disabled', false);
+                $('#applicationSelect').prop('disabled', false);
+            } else if (hasGetAllUsers) {
+                $('#companySelect').prop('disabled', true);
+                $('#applicationSelect').prop('disabled', true);
+            }
+
+            // Kullanıcılar göster butonuna tıklama olayı
+            $('#filterUsersBtn').on('click', function () {
+                var companyId = $('#companySelect').val();
+                var applicationId = $('#applicationSelect').val();
+                var pageSize = 10; // Varsayılan sayfa boyutu
+
+                if (companyId && applicationId) {
+                    loadUsers(companyId, applicationId, 1, pageSize); // Varsayılan olarak 1. sayfa ve 10 kayıt göster
+                } else {
+                    alert('Lütfen hem şirket hem de uygulama seçiniz.');
+                }
+            });
+        });
+        // Kullanıcılar göster butonuna tıklama olayı
+        $('#filterUsersBtn').on('click', function () {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+            var pageSize = 10; // Varsayılan sayfa boyutu
+
+            if (companyId && applicationId) {
+                loadUsers(companyId, applicationId, 1, pageSize); // Varsayılan olarak 1. sayfa ve 10 kayıt göster
+            } else {
+                alert('Lütfen hem şirket hem de uygulama seçiniz.');
+            }
+        });
+
+        function editUser(id) {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+
+            if (!companyId || !applicationId) {
+                alert('Lütfen şirket ve uygulama seçiniz.');
+                return;
+            }
+
+            window.location.href = '@Url.Action("Edit", "User")' + '?id=' + id + '&companyId=' + companyId + '&applicationId=' + applicationId;
+        }
+
+        // Sayfa boyutunu güncelleyen fonksiyon
+        function updatePageSize(pageSize) {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+            var pageNumber = 1; // Sayfa boyutunu değiştirdiğimizde 1. sayfaya döneceğiz
+
+            if (companyId && applicationId) {
+                loadUsers(companyId, applicationId, pageNumber, pageSize);
+            }
+        }
+
+        // Dinamik olarak kullanıcıları yükleyen fonksiyon
+        const loadUsers = (companyId, applicationId, pageNumber, pageSize) => {
+            $.ajax({
+                url: '/User/GetUsersByCompanyAndApplication',
+                type: 'POST',
+                data: {
+                    companyId: companyId,
+                    applicationId: applicationId,
+                    pageNumber: pageNumber,
+                    pageSize: pageSize
+                },
+                success: (response) => {
+                    $('#usersTableContainer').html(response);
+                },
+                error: () => {
+                    alert("Veriler yüklenemedi.");
+                }
+            });
+        };
+
+        // Sayfa numarası butonlarına tıklama olayı
+        $('body').on('click', '.page-link', function () {
+            var companyId = $('#companySelect').val();
+            var applicationId = $('#applicationSelect').val();
+            var pageNumber = $(this).data('pagenumber');
+            var pageSize = $('#pageSizeSelect').val();
+
+            loadUsers(companyId, applicationId, pageNumber, pageSize);
+        });
+
+        // Sayfa boyutu değiştiğinde olay
+        $('body').on('change', '#pageSizeSelect', function () {
+            var pageSize = $(this).val();
+            updatePageSize(pageSize);
+        });
+
+        let currentUserId = null; // Global variable to store current userId
+
+        // function deleteUser(id) {
+        //     Swal.fire({
+        //         title: 'Emin misiniz?',
+        //         text: "Bu kaydı silmek istediğinizden emin misiniz?",
+        //         icon: 'warning',
+        //         showCancelButton: true,
+        //         confirmButtonText: 'Evet, Sil!',
+        //         cancelButtonText: 'Hayır, İptal Et',
+        //         reverseButtons: true
+        //     }).then(function (result) {
+        //         if (result.isConfirmed) {
+        //             $.ajax({
+        //                 url: '@Url.Action("Delete", "User")/' + id,
+        //                 type: 'POST',
+        //                 success: function (response) {
+        //                     Swal.fire(
+        //                         'Silindi!',
+        //                         'Kayıt başarıyla silindi.',
+        //                         'success'
+        //                     ).then(() => {
+        //                         window.location.reload();
+        //                     });
+        //                 },
+        //                 error: function () {
+        //                     Swal.fire(
+        //                         'Hata!',
+        //                         'Silme işlemi sırasında bir hata oluştu.',
+        //                         'error'
+        //                     );
+        //                 }
+        //             });
+        //         }
+        //     });
+        // // }
+
+        function deleteUser(id, companyId, applicationId) {
+            Swal.fire({
+                title: 'Emin misiniz?',
+                text: "Bu kaydı silmek istediğinizden emin misiniz?",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Evet, Sil!',
+                cancelButtonText: 'Hayır, İptal Et',
+                reverseButtons: true
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    $.ajax({
+                        url: '@Url.Action("Delete", "User")',
+                        type: 'POST',
+                        data: {
+                            id: id,
+                            companyId: companyId,
+                            applicationId: applicationId
+                        },
+                        success: function (response) {
+                            Swal.fire(
+                                'Silindi!',
+                                'Kayıt başarıyla silindi.',
+                                'success'
+                            ).then(() => {
+                                window.location.reload();
+                            });
+                        },
+                        error: function () {
+                            Swal.fire(
+                                'Hata!',
+                                'Silme işlemi sırasında bir hata oluştu.',
+                                'error'
+                            );
+                        }
+                    });
+                }
+            });
+        }
+
+
+        function openClaimsModal(userId) {
+            var companyId = $('#companySelect').val();  // Şirket ID'si
+            var applicationId = $('#applicationSelect').val();  // Uygulama ID'si
+
+            if (!companyId || !applicationId) {
+                alert('Lütfen şirket ve uygulama seçiniz.');
+                return;
+            }
+
+            currentUserId = userId; // Set the current userId
+
+            $.ajax({
+                url: '@Url.Action("GetUserClaims", "User")' + '?userId=' + userId + '&companyId=' + companyId + '&applicationId=' + applicationId,
+                type: 'GET',
+                success: function (response) {
+                    $('#claimsList').html(response);
+                    $('#claimsModal').modal('show');
+                },
+                error: function () {
+                    Swal.fire(
+                        'Hata!',
+                        'Yetkiler alınırken bir hata oluştu.',
+                        'error'
+                    );
+                }
+            });
+        }
+
+
+        function updateClaims() {
+            var form = $('#claimsForm');
+            var formDataArray = form.serializeArray();
+            var claims = [];
+
+            // Parse form data into claims array
+            formDataArray.forEach(function (item) {
+                if (item.name.startsWith("claimValue")) {
+                    // Find the corresponding claim type using the claim value
+                    var claimValue = item.value;
+                    var claimTypeInput = form.find(`input[name='claimType_${claimValue}']`).val();
+
+                    claims.push({
+                        Type: claimTypeInput, // Set the correct ClaimType
+                        Value: claimValue // The ClaimValue from the checkbox
+                    });
+                }
+            });
+
+            // Ensure currentUserId is being used here
+            $.ajax({
+                url: '@Url.Action("UpdateUserClaims", "User")', // Frontend controller endpoint
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ userId: currentUserId, claims: claims }), // Use currentUserId and claims
+                success: function (response) {
+                    Swal.fire(
+                        'Güncellendi!',
+                        response,
+                        'success'
+                    ).then(() => {
+                        $('#claimsModal').modal('hide');
+                    });
+                },
+                error: function (xhr) {
+                    let errorMessage = 'Yetkiler güncellenirken bir hata oluştu.';
+                    if (xhr.responseText) {
+                        errorMessage = xhr.responseText;
+                    }
+                    Swal.fire(
+                        'Hata!',
+                        errorMessage,
+                        'error'
+                    );
+                }
+            });
         }
     </script>
 }
